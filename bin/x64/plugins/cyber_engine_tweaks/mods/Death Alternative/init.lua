@@ -2,12 +2,12 @@ local moneyID = ItemID.new(TweakDBID.new("Items.money"))
 
 local IProps = {
 	deltaTime = 0,
+	timeLoaded = 0,
 	activePackage = nil,
 	drawSetupMenu = false,
 	canPayRevive = false,
 	canDrawDeathScreen = false,
 	canDrawBuyLifePackScreen = false,
-	rootPath = "plugins.cyber_engine_tweaks.mods.Death Alternative.",
 	hospitalCoords = {
 		{ x = -1337.394, y = 1745.6206 },
 		{ x = -1331.4171, y = 1745.0977 },
@@ -16,8 +16,8 @@ local IProps = {
 	}
 }
 
-local CPS = require(IProps.rootPath.."CPStyling")
-local Utils = require(IProps.rootPath.."utilities")
+local CPS = require("CPStyling")
+local Utils = require("utilities")
 local heme = CPS.theme
 local color = CPS.color
 
@@ -69,8 +69,10 @@ function cancelRevive(player)
 end
 
 function lowHealthThresholdReached(player)
+	-- As vehicle will be teleported alongside the player, dying in a car triggers the native death scene for now
+	local isInVehicle = Game['GetMountedVehicle;GameObject'](Game.GetPlayer())
 
-	if IProps.activePackage > 0 then
+	if not isInVehicle and IProps.activePackage > 0 then
 		
 		local playerMoney = ts:GetItemQuantity(player, moneyID)
 		local packageValue = Config.lifePackages[IProps.activePackage].price
@@ -91,9 +93,7 @@ function lowHealthThresholdReached(player)
 end
 
 function checkActiveLifePack()
-	
 	IProps.activePackage = qs:GetFactStr("activeHealthPack")
-
 end
 
 function playerIsInDistance(coordsList, maxDistance)
@@ -115,27 +115,20 @@ function playerIsInDistance(coordsList, maxDistance)
 	return false
 end
 
-function runUpdates()
-	if Game.GetQuestsSystem():GetFactStr("q000_started") == 1 then 
-		player = Game.GetPlayer()
-	end
+function runUpdates(player)
 
+	local player = Game.GetPlayer()
 	if not player then return end
 
 	local currentHealthPercentage = player.healthStatListener.healthEvent.value
 
 	checkActiveLifePack()
-	if not IProps.activePackage and hasGodMode(player) then 
-		disableGodMod(player)
-		Game.GetPlayer():SetWarningMessage("Alternative Death Disabled")
-	end
 
-	if IProps.activePackage and not hasGodMode(player) and currentHealthPercentage > 1 then 
+	if not hasGodMode(player) then 
 		enableGodMod(player)
-		-- Game.GetPlayer():SetWarningMessage("Alternative Death Enabled")
 	end
 
-	if IProps.activePackage and currentHealthPercentage == 1 then
+	if currentHealthPercentage == 1 then
 		lowHealthThresholdReached(player, IProps.activePackage)
 	end
 
@@ -299,6 +292,7 @@ function drawBuyLifePack()
 	end
 end
 
+
 registerForEvent("onInit", function()
 	ts = Game.GetTransactionSystem()
 	as = Game.GetActivityLogSystem()
@@ -314,8 +308,8 @@ registerForEvent("onUpdate", function(deltaTime)
 	
 	IProps.deltaTime = IProps.deltaTime + deltaTime
 
-    if IProps.deltaTime > 1 then
-        runUpdates()
+	if IProps.deltaTime > 1 then
+		runUpdates()
         IProps.deltaTime = IProps.deltaTime - 1
     end
 
@@ -333,9 +327,6 @@ registerHotkey("exit_hotel", "Exit Hotel", function()
 end)
 
 registerForEvent("onDraw", function()
-
-	drawDeathScreen(IProps.canDrawDeathScreen)
-
-	drawBuyLifePack(IProps.canDrawBuyLifePackScreen, Game.GetQuestsSystem())
-
+	drawDeathScreen()
+	drawBuyLifePack()
 end)
